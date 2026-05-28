@@ -112,7 +112,7 @@ export default function TestSessionForm({ onResults, apiUrl }) {
       {/* ── Tier 2 ─────────────────────────────────────────── */}
       <h2 style={{ marginBottom: ".25rem" }}>Test Session</h2>
       <p className="text-muted text-sm" style={{ marginBottom: "1.25rem" }}>
-        Describe what you're testing in this session.
+        Describe what you&apos;re testing in this session.
       </p>
 
       <div className="field">

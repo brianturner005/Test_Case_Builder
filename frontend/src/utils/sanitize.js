@@ -22,6 +22,7 @@ export function sanitizeText(value, maxLength = 2000) {
   return value
     .slice(0, maxLength)
     // Remove ASCII control characters except tab (\x09) and newline (\x0a, \x0d)
+    // eslint-disable-next-line no-control-regex
     .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, "")
     // Collapse excessive whitespace (more than 3 consecutive newlines → 2)
     .replace(/\n{3,}/g, "\n\n")
