@@ -18,20 +18,6 @@ const PRIORITY_CLASS = {
   Low:    "badge-low",
 };
 
-const STATUS_CLASS = {
-  "Not Run": "badge-notrun",
-  Pass:      "badge-pass",
-  Fail:      "badge-fail",
-  Blocked:   "badge-blocked",
-};
-
-function formatSteps(steps) {
-  if (!steps || steps.length === 0) return "—";
-  if (Array.isArray(steps)) {
-    return steps.map((s, i) => `${i + 1}. ${s}`).join("\n");
-  }
-  return String(steps);
-}
 
 function escapeCsvCell(value) {
   const str = String(value ?? "");
