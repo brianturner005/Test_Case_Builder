@@ -335,6 +335,9 @@ module.exports = async function (context, req) {
     "Access-Control-Allow-Headers": "Content-Type",
   };
 
+  try {
+  // ── vvv all logic wrapped so unhandled throws produce readable JSON vvv ───
+
   if (req.method === "OPTIONS") {
     context.res = { status: 204, headers: corsHeaders };
     return;
@@ -435,4 +438,15 @@ module.exports = async function (context, req) {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
     body: JSON.stringify({ testCases }),
   };
+
+  } catch (fatal) {
+    // Catch anything that escaped the inner try/catch blocks so Azure never
+    // returns an opaque Base64-encoded error page.
+    context.log.error("Unhandled exception in generateTestCases:", fatal?.message, fatal?.stack);
+    context.res = {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      body: JSON.stringify({ error: `Unexpected error: ${fatal?.message ?? String(fatal)}` }),
+    };
+  }
 };
