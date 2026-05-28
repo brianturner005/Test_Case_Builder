@@ -335,14 +335,18 @@ module.exports = async function (context, req) {
     "Access-Control-Allow-Headers": "Content-Type",
   };
 
+  try {
+  // ── vvv all logic wrapped so unhandled throws produce readable JSON vvv ───
+
   if (req.method === "OPTIONS") {
-    context.res = { status: 204, headers: corsHeaders };
+    context.res = { status: 204, isRaw: true, headers: corsHeaders };
     return;
   }
 
   if (req.method !== "POST") {
     context.res = {
       status: 405,
+      isRaw: true,
       headers: corsHeaders,
       body: JSON.stringify({ error: "Method Not Allowed" }),
     };
@@ -357,6 +361,7 @@ module.exports = async function (context, req) {
   } catch {
     context.res = {
       status: 400,
+      isRaw: true,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       body: JSON.stringify({ error: "Invalid JSON in request body." }),
     };
@@ -370,6 +375,7 @@ module.exports = async function (context, req) {
   if (!whatAreTesting) {
     context.res = {
       status: 422,
+      isRaw: true,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       body: JSON.stringify({ error: "sessionForm.whatAreTesting is required." }),
     };
@@ -386,6 +392,7 @@ module.exports = async function (context, req) {
     context.log.error("GENAI_API_KEY is not set.");
     context.res = {
       status: 500,
+      isRaw: true,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       body: JSON.stringify({ error: "AI provider is not configured. Contact your administrator." }),
     };
@@ -407,6 +414,7 @@ module.exports = async function (context, req) {
     context.log.error("AI provider call failed:", err.message);
     context.res = {
       status: 502,
+      isRaw: true,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       body: JSON.stringify({ error: `AI provider error: ${err.message}` }),
     };
@@ -422,6 +430,7 @@ module.exports = async function (context, req) {
     context.log.warn("Raw AI response:", rawText?.slice(0, 500));
     context.res = {
       status: 502,
+      isRaw: true,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       body: JSON.stringify({
         error: "AI returned an unexpected response format. Please try again.",
@@ -432,7 +441,20 @@ module.exports = async function (context, req) {
 
   context.res = {
     status: 200,
+    isRaw: true,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
     body: JSON.stringify({ testCases }),
   };
+
+  } catch (fatal) {
+    // Catch anything that escaped the inner try/catch blocks so Azure never
+    // returns an opaque Base64-encoded error page.
+    context.log.error("Unhandled exception in generateTestCases:", fatal?.message, fatal?.stack);
+    context.res = {
+      status: 500,
+      isRaw: true,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      body: JSON.stringify({ error: `Unexpected error: ${fatal?.message ?? String(fatal)}` }),
+    };
+  }
 };
