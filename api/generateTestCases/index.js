@@ -14,6 +14,49 @@
 
 "use strict";
 
+const https = require("https");
+const http  = require("http");
+const { URL } = require("url");
+
+// ── HTTP helper (replaces fetch for Node 16 compatibility) ───────────────────
+
+/**
+ * Make an HTTPS/HTTP POST request and return { status, body }.
+ * @param {string} urlStr
+ * @param {Record<string,string>} headers
+ * @param {string} bodyStr
+ * @returns {Promise<{ status: number, body: string }>}
+ */
+function httpPost(urlStr, headers, bodyStr) {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(urlStr);
+    const transport = parsed.protocol === "https:" ? https : http;
+
+    const options = {
+      hostname: parsed.hostname,
+      port: parsed.port || (parsed.protocol === "https:" ? 443 : 80),
+      path: parsed.pathname + parsed.search,
+      method: "POST",
+      headers: {
+        ...headers,
+        "Content-Length": Buffer.byteLength(bodyStr),
+      },
+    };
+
+    const req = transport.request(options, (res) => {
+      const chunks = [];
+      res.on("data", (chunk) => chunks.push(chunk));
+      res.on("end", () =>
+        resolve({ status: res.statusCode, body: Buffer.concat(chunks).toString("utf8") })
+      );
+    });
+
+    req.on("error", reject);
+    req.write(bodyStr);
+    req.end();
+  });
+}
+
 // ── Input sanitization ───────────────────────────────────────────────────────
 
 /**
@@ -185,22 +228,17 @@ async function callClaude(systemPrompt, userPrompt, apiKey, apiUrl, model) {
     messages: [{ role: "user", content: userPrompt }],
   });
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body,
-  });
+  const res = await httpPost(url, {
+    "Content-Type": "application/json",
+    "x-api-key": apiKey,
+    "anthropic-version": "2023-06-01",
+  }, body);
 
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Claude API error ${res.status}: ${err}`);
+  if (res.status < 200 || res.status >= 300) {
+    throw new Error(`Claude API error ${res.status}: ${res.body}`);
   }
 
-  const data = await res.json();
+  const data = JSON.parse(res.body);
   return data.content?.[0]?.text ?? "";
 }
 
@@ -242,14 +280,13 @@ async function callOpenAICompat(systemPrompt, userPrompt, apiKey, apiUrl, model,
     ],
   });
 
-  const res = await fetch(url, { method: "POST", headers, body });
+  const res = await httpPost(url, headers, body);
 
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`${provider} API error ${res.status}: ${err}`);
+  if (res.status < 200 || res.status >= 300) {
+    throw new Error(`${provider} API error ${res.status}: ${res.body}`);
   }
 
-  const data = await res.json();
+  const data = JSON.parse(res.body);
   return data.choices?.[0]?.message?.content ?? "";
 }
 
