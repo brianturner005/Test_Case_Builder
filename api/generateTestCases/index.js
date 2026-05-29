@@ -259,20 +259,24 @@ module.exports = async function (context, req) {
     "Access-Control-Allow-Headers": "Content-Type",
   };
 
-  const json = (status, body) => ({
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  const respond = (status, body) => {
+    context.res = {
+      status,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    };
+  };
 
   try {
 
     if (req.method === "OPTIONS") {
-      return { status: 204, headers: corsHeaders };
+      context.res = { status: 204, headers: corsHeaders };
+      return;
     }
 
     if (req.method !== "POST") {
-      return json(405, { error: "Method Not Allowed" });
+      respond(405, { error: "Method Not Allowed" });
+      return;
     }
 
     let payload;
@@ -280,13 +284,15 @@ module.exports = async function (context, req) {
       payload = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
       if (!payload || typeof payload !== "object") throw new Error("empty");
     } catch {
-      return json(400, { error: "Invalid JSON in request body." });
+      respond(400, { error: "Invalid JSON in request body." });
+      return;
     }
 
     const sanitized = sanitizeObject(payload);
 
-    if (!sanitized?.sessionForm?.whatAreTesting) {
-      return json(422, { error: "sessionForm.whatAreTesting is required." });
+    if (!sanitized || !sanitized.sessionForm || !sanitized.sessionForm.whatAreTesting) {
+      respond(422, { error: "sessionForm.whatAreTesting is required." });
+      return;
     }
 
     const provider = (process.env.GENAI_PROVIDER || "claude").toLowerCase();
@@ -296,7 +302,8 @@ module.exports = async function (context, req) {
 
     if (!apiKey) {
       context.log.error("GENAI_API_KEY is not set.");
-      return json(500, { error: "AI provider is not configured. Contact your administrator." });
+      respond(500, { error: "AI provider is not configured. Contact your administrator." });
+      return;
     }
 
     const systemPrompt = buildSystemPrompt();
@@ -309,7 +316,8 @@ module.exports = async function (context, req) {
         : await callOpenAICompat(systemPrompt, userPrompt, apiKey, apiUrl, model, provider);
     } catch (err) {
       context.log.error("AI provider call failed:", err.message);
-      return json(502, { error: `AI provider error: ${err.message}` });
+      respond(502, { error: "AI provider error: " + err.message });
+      return;
     }
 
     let testCases;
@@ -317,18 +325,18 @@ module.exports = async function (context, req) {
       testCases = parseTestCases(rawText);
     } catch (err) {
       context.log.error("Failed to parse AI response:", err.message);
-      context.log.warn("Raw AI response:", rawText?.slice(0, 500));
-      return json(502, { error: "AI returned an unexpected response format. Please try again." });
+      respond(502, { error: "AI returned an unexpected response format. Please try again." });
+      return;
     }
 
-    return json(200, { testCases });
+    respond(200, { testCases });
 
   } catch (fatal) {
-    context.log.error("Unhandled exception:", fatal?.message, fatal?.stack);
-    return {
+    context.log.error("Unhandled exception:", fatal && fatal.message, fatal && fatal.stack);
+    context.res = {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
-      body: JSON.stringify({ error: `Unexpected error: ${fatal?.message ?? String(fatal)}` }),
+      body: JSON.stringify({ error: "Unexpected error: " + (fatal && fatal.message || String(fatal)) }),
     };
   }
 };
