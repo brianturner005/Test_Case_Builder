@@ -335,22 +335,20 @@ module.exports = async function (context, req) {
     "Access-Control-Allow-Headers": "Content-Type",
   };
 
+  const json = (status, body) => ({
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
   try {
-  // ── vvv all logic wrapped so unhandled throws produce readable JSON vvv ───
 
   if (req.method === "OPTIONS") {
-    context.res = { status: 204, isRaw: true, headers: corsHeaders };
-    return;
+    return { status: 204, headers: corsHeaders };
   }
 
   if (req.method !== "POST") {
-    context.res = {
-      status: 405,
-      isRaw: true,
-      headers: corsHeaders,
-      body: JSON.stringify({ error: "Method Not Allowed" }),
-    };
-    return;
+    return json(405, { error: "Method Not Allowed" });
   }
 
   // ── Parse + sanitize request body ────────────────────────────────────────
@@ -359,27 +357,14 @@ module.exports = async function (context, req) {
     payload = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
     if (!payload || typeof payload !== "object") throw new Error("empty");
   } catch {
-    context.res = {
-      status: 400,
-      isRaw: true,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      body: JSON.stringify({ error: "Invalid JSON in request body." }),
-    };
-    return;
+    return json(400, { error: "Invalid JSON in request body." });
   }
 
   const sanitized = sanitizeObject(payload);
 
-  // Basic validation
   const whatAreTesting = sanitized?.sessionForm?.whatAreTesting;
   if (!whatAreTesting) {
-    context.res = {
-      status: 422,
-      isRaw: true,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      body: JSON.stringify({ error: "sessionForm.whatAreTesting is required." }),
-    };
-    return;
+    return json(422, { error: "sessionForm.whatAreTesting is required." });
   }
 
   // ── Load provider config from environment ─────────────────────────────────
@@ -390,13 +375,7 @@ module.exports = async function (context, req) {
 
   if (!apiKey) {
     context.log.error("GENAI_API_KEY is not set.");
-    context.res = {
-      status: 500,
-      isRaw: true,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      body: JSON.stringify({ error: "AI provider is not configured. Contact your administrator." }),
-    };
-    return;
+    return json(500, { error: "AI provider is not configured. Contact your administrator." });
   }
 
   // ── Call AI ───────────────────────────────────────────────────────────────
@@ -412,13 +391,7 @@ module.exports = async function (context, req) {
     }
   } catch (err) {
     context.log.error("AI provider call failed:", err.message);
-    context.res = {
-      status: 502,
-      isRaw: true,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      body: JSON.stringify({ error: `AI provider error: ${err.message}` }),
-    };
-    return;
+    return json(502, { error: `AI provider error: ${err.message}` });
   }
 
   // ── Parse response ────────────────────────────────────────────────────────
@@ -428,31 +401,15 @@ module.exports = async function (context, req) {
   } catch (err) {
     context.log.error("Failed to parse AI response:", err.message);
     context.log.warn("Raw AI response:", rawText?.slice(0, 500));
-    context.res = {
-      status: 502,
-      isRaw: true,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        error: "AI returned an unexpected response format. Please try again.",
-      }),
-    };
-    return;
+    return json(502, { error: "AI returned an unexpected response format. Please try again." });
   }
 
-  context.res = {
-    status: 200,
-    isRaw: true,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-    body: JSON.stringify({ testCases }),
-  };
+  return json(200, { testCases });
 
   } catch (fatal) {
-    // Catch anything that escaped the inner try/catch blocks so Azure never
-    // returns an opaque Base64-encoded error page.
     context.log.error("Unhandled exception in generateTestCases:", fatal?.message, fatal?.stack);
-    context.res = {
+    return {
       status: 500,
-      isRaw: true,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       body: JSON.stringify({ error: `Unexpected error: ${fatal?.message ?? String(fatal)}` }),
     };
