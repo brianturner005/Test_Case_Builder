@@ -5,8 +5,8 @@ const http  = require("http");
 
 // ── HTTP helper (replaces fetch for Node 16 compatibility) ───────────────────
 
-// 25 s — beats Azure SWA's ~30 s proxy cutoff.
-const HTTP_TIMEOUT_MS = 25000;
+// 90 s — SWA proxy timeout is confirmed longer than 25 s; give the AI room.
+const HTTP_TIMEOUT_MS = 90000;
 
 function httpPost(urlStr, headers, bodyStr) {
   return new Promise((resolve, reject) => {
@@ -178,7 +178,7 @@ async function callClaude(systemPrompt, userPrompt, apiKey, apiUrl, model) {
 
   const body = JSON.stringify({
     model: chosenModel,
-    max_tokens: 8192,
+    max_tokens: 4096,
     system: systemPrompt,
     messages: [{ role: "user", content: userPrompt }],
   });
@@ -217,7 +217,7 @@ async function callOpenAICompat(systemPrompt, userPrompt, apiKey, apiUrl, model,
 
   const body = JSON.stringify({
     model: chosenModel,
-    max_tokens: 8192,
+    max_tokens: 4096,
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
