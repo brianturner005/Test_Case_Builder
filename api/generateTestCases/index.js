@@ -5,12 +5,11 @@ const http  = require("http");
 
 // ── HTTP helper (replaces fetch for Node 16 compatibility) ───────────────────
 
-// 25 s wall-clock timeout — beats Azure SWA's ~30 s proxy cutoff so we
-// can return a readable JSON error instead of "Backend call failure".
+// 25 s — beats Azure SWA's ~30 s proxy cutoff.
 const HTTP_TIMEOUT_MS = 25000;
 
 function httpPost(urlStr, headers, bodyStr) {
-  const request = new Promise((resolve, reject) => {
+  return new Promise((resolve, reject) => {
     const parsed = new URL(urlStr);
     const transport = parsed.protocol === "https:" ? https : http;
 
@@ -25,30 +24,29 @@ function httpPost(urlStr, headers, bodyStr) {
       },
     };
 
+    // Ensure resolve/reject fire at most once regardless of timeout vs response race.
+    let done = false;
+    const settle = (fn) => (val) => { if (!done) { done = true; fn(val); } };
+
+    const timer = setTimeout(() => {
+      req.destroy();
+      settle(reject)(new Error("AI provider request timed out — please try again"));
+    }, HTTP_TIMEOUT_MS);
+
     const req = transport.request(options, (res) => {
       const chunks = [];
       res.on("data", (chunk) => chunks.push(chunk));
-      res.on("end", () =>
-        resolve({ status: res.statusCode, body: Buffer.concat(chunks).toString("utf8") })
-      );
+      res.on("end", () => {
+        clearTimeout(timer);
+        settle(resolve)({ status: res.statusCode, body: Buffer.concat(chunks).toString("utf8") });
+      });
+      res.on("error", (err) => { clearTimeout(timer); settle(reject)(err); });
     });
 
-    // Socket-level timeout (fires once connection is established)
-    req.setTimeout(HTTP_TIMEOUT_MS, () => req.destroy());
-    req.on("error", reject);
+    req.on("error", (err) => { clearTimeout(timer); settle(reject)(err); });
     req.write(bodyStr);
     req.end();
   });
-
-  // Wall-clock timeout — fires even if DNS or TCP never resolves
-  const timeout = new Promise((_, reject) =>
-    setTimeout(
-      () => reject(new Error("AI provider request timed out — please try again")),
-      HTTP_TIMEOUT_MS
-    )
-  );
-
-  return Promise.race([request, timeout]);
 }
 
 // ── Input sanitization ───────────────────────────────────────────────────────
