@@ -84,10 +84,9 @@ const OUTPUT_FORMAT_INSTRUCTIONS = {
 };
 
 const DEPTH_INSTRUCTIONS = {
-  basic:      "Generate only the most critical happy-path and primary failure-path test cases.",
-  standard:   "Generate a balanced set of test cases: happy paths, key failure paths, and common edge cases.",
-  exhaustive: "Generate a comprehensive set covering all happy paths, failure paths, boundary conditions, " +
-              "concurrency scenarios, and any corner cases relevant to the change.",
+  basic:      "Generate 3-5 test cases covering only the most critical happy-path and primary failure-path scenarios.",
+  standard:   "Generate 5-8 test cases: happy paths, key failure paths, and the most important edge cases.",
+  exhaustive: "Generate 8-12 test cases covering happy paths, failure paths, boundary conditions, and the highest-value corner cases.",
 };
 
 const NEGATIVE_INSTRUCTIONS = {
@@ -178,7 +177,7 @@ async function callClaude(systemPrompt, userPrompt, apiKey, apiUrl, model) {
 
   const body = JSON.stringify({
     model: chosenModel,
-    max_tokens: 4096,
+    max_tokens: 2048,
     system: systemPrompt,
     messages: [{ role: "user", content: userPrompt }],
   });
@@ -217,7 +216,7 @@ async function callOpenAICompat(systemPrompt, userPrompt, apiKey, apiUrl, model,
 
   const body = JSON.stringify({
     model: chosenModel,
-    max_tokens: 4096,
+    max_tokens: 2048,
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
