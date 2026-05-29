@@ -1,9 +1,4 @@
 {
   "name": "test-case-builder-api",
-  "version": "1.0.0",
-  "description": "Azure managed functions for Test Case Builder",
-  "main": "index.js",
-  "engines": {
-    "node": ">=16"
-  }
+  "version": "1.0.0"
 }
