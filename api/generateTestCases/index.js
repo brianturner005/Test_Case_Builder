@@ -5,6 +5,10 @@ const http  = require("http");
 
 // ── HTTP helper (replaces fetch for Node 16 compatibility) ───────────────────
 
+// 25 s — stays under Azure SWA's ~30 s proxy timeout so we can return a
+// readable error instead of the proxy's opaque "Backend call failure" blob.
+const HTTP_TIMEOUT_MS = 25_000;
+
 function httpPost(urlStr, headers, bodyStr) {
   return new Promise((resolve, reject) => {
     const parsed = new URL(urlStr);
@@ -27,6 +31,10 @@ function httpPost(urlStr, headers, bodyStr) {
       res.on("end", () =>
         resolve({ status: res.statusCode, body: Buffer.concat(chunks).toString("utf8") })
       );
+    });
+
+    req.setTimeout(HTTP_TIMEOUT_MS, () => {
+      req.destroy(new Error(`AI provider request timed out after ${HTTP_TIMEOUT_MS / 1000}s`));
     });
 
     req.on("error", reject);
