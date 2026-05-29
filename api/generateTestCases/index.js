@@ -5,8 +5,12 @@ const http  = require("http");
 
 // ── HTTP helper (replaces fetch for Node 16 compatibility) ───────────────────
 
+// 25 s wall-clock timeout — beats Azure SWA's ~30 s proxy cutoff so we
+// can return a readable JSON error instead of "Backend call failure".
+const HTTP_TIMEOUT_MS = 25000;
+
 function httpPost(urlStr, headers, bodyStr) {
-  return new Promise((resolve, reject) => {
+  const request = new Promise((resolve, reject) => {
     const parsed = new URL(urlStr);
     const transport = parsed.protocol === "https:" ? https : http;
 
@@ -29,10 +33,22 @@ function httpPost(urlStr, headers, bodyStr) {
       );
     });
 
+    // Socket-level timeout (fires once connection is established)
+    req.setTimeout(HTTP_TIMEOUT_MS, () => req.destroy());
     req.on("error", reject);
     req.write(bodyStr);
     req.end();
   });
+
+  // Wall-clock timeout — fires even if DNS or TCP never resolves
+  const timeout = new Promise((_, reject) =>
+    setTimeout(
+      () => reject(new Error("AI provider request timed out — please try again")),
+      HTTP_TIMEOUT_MS
+    )
+  );
+
+  return Promise.race([request, timeout]);
 }
 
 // ── Input sanitization ───────────────────────────────────────────────────────
